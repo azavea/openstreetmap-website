@@ -29,11 +29,15 @@ pushd /srv/openstreetmap-website
 # do bundle install as a convenience
 bundle install --retry=10 --jobs=2
 # create user and database for openstreetmap-website
-db_user_exists=`sudo -u postgres psql postgres -tAc "select 1 from pg_roles where rolname='vagrant'"`
+db_user_exists=`sudo -u postgres psql postgres -tAc "select 1 from pg_roles where rolname='openstreetmap'"`
 if [ "$db_user_exists" != "1" ]; then
     sudo -u postgres createuser -s vagrant
-    sudo -u vagrant createdb -E UTF-8 -O vagrant openstreetmap
-    sudo -u vagrant createdb -E UTF-8 -O vagrant osm_test
+    sudo -u postgres createuser -s openstreetmap
+    sudo -u postgres psql -c "ALTER USER openstreetmap WITH PASSWORD 'openstreetmap';"
+    sudo -u vagrant createdb -E UTF-8 -O vagrant vagrant
+    sudo -u vagrant createdb -E UTF-8 -O openstreetmap openstreetmap
+    sudo -u vagrant createdb -E UTF-8 -O openstreetmap osm_test
+    sudo -u vagrant psql -c "GRANT openstreetmap TO vagrant;"
     # add btree_gist extension
     sudo -u vagrant psql -c "create extension btree_gist" openstreetmap
     sudo -u vagrant psql -c "create extension btree_gist" osm_test
