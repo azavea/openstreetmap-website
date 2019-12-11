@@ -30,29 +30,15 @@ pushd /srv/openstreetmap-website
 # do bundle install as a convenience
 bundle install --retry=10 --jobs=2
 
-echo 'drop current databases and users'
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS openstreetmap"
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS osm_test"
-sudo -u postgres psql -c "DROP DATABASE IF EXISTS vagrant"
-sudo -u postgres psql -c "DROP ROLE IF EXISTS openstreetmap"
-sudo -u postgres psql -c "DROP ROLE IF EXISTS vagrant"
+# Run SQL
+pushd /srv/openstreetmap-website/script/vagrant/setup
+echo 'drop and recreate databases and users'
+sudo -u postgres psql -f recreate_databases.sql
 
-# Create users and databases
-echo 'create vagrant user'
-sudo -u postgres createuser -s vagrant
-echo 'create openstreetmap user'
-sudo -u postgres psql -c "CREATE USER openstreetmap WITH PASSWORD 'openstreetmap'"
-echo 'create databases'
-sudo -u postgres psql -c "CREATE DATABASE vagrant WITH OWNER vagrant"
-sudo -u postgres psql -c "CREATE DATABASE openstreetmap WITH OWNER openstreetmap"
-sudo -u postgres psql -c "CREATE DATABASE osm_test WITH OWNER openstreetmap"
-sudo -u postgres psql -c "GRANT openstreetmap TO vagrant"
-sudo -u postgres psql -c "create extension btree_gist" osm_test
-sudo -u postgres psql -c "create extension btree_gist" openstreetmap
-
-# Set up the database for osmosis
-sudo -u postgres psql -c "create extension postgis" openstreetmap
-sudo -u postgres psql -c "create extension hstore" openstreetmap
+echo 'add database extensions'
+sudo -u postgres psql -f add_extensions.sql openstreetmap
+sudo -u postgres psql -f add_extensions.sql osm_test
+pushd /srv/openstreetmap-website
 
 # Create the database tables for OSM an migrate to the specific APIDB schema version
 # that is the last APIDB version used by osmosis:
