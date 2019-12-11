@@ -3,7 +3,6 @@
 # abort on error
 set -e
 
-
 # set locale to UTF-8 compatible. apologies to non-english speakers...
 locale-gen en_GB.utf8
 update-locale LANG=en_GB.utf8 LC_ALL=en_GB.utf8
@@ -26,61 +25,68 @@ apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
 gem2.5 install rake
 gem2.5 install --version "~> 1.16.2" bundler
 
-
 ## install the bundle necessary for openstreetmap-website
 pushd /srv/openstreetmap-website
 # do bundle install as a convenience
 bundle install --retry=10 --jobs=2
-echo 'check for database user'
-# create user and database for openstreetmap-website
-db_user_exists=`sudo -u postgres psql postgres -tAc "select 1 from pg_roles where rolname='openstreetmap'"`
-if [ "$db_user_exists" != "1" ]; then
-    echo 'create vagrant user'
-    sudo -u postgres createuser -s vagrant
-    echo 'create openstreetmap user'
-    sudo -u postgres psql -c "CREATE USER openstreetmap WITH PASSWORD 'openstreetmap'"
-    echo 'create vagrant user database'
-    createdb -E UTF-8 -U vagrant -O vagrant vagrant
-    createdb -E UTF-8 -U vagrant -O openstreetmap openstreetmap
-    createdb -E UTF-8 -U vagrant -O openstreetmap osm_test
-    psql -c "GRANT openstreetmap TO vagrant;"
-    psql -c "create extension btree_gist" osm_test
-    psql -c "create extension btree_gist" openstreetmap
 
-    # Set up the database for osmosis
-    psql -c "create extension postgis" openstreetmap
-    psql -c "create extension hstore" openstreetmap
+echo 'drop current databases and users'
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS openstreetmap"
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS osm_test"
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS vagrant"
+sudo -u postgres psql -c "DROP ROLE IF EXISTS openstreetmap"
+sudo -u postgres psql -c "DROP ROLE IF EXISTS vagrant"
 
-    # Create the database tables for OSM an migrate to the specific APIDB schema version
-    # that is the last APIDB version used by osmosis:
-    # https://github.com/openstreetmap/osmosis/blob/2219470cef1f73f5d1319c57149c84b398e767ce/osmosis-apidb/src/main/java/org/openstreetmap/osmosis/apidb/v0_6/ApidbVersionConstants.java
-    echo 'apply migrations to osmosis version'
-    bundle exec rake db:migrate VERSION=20130328184137
+# Create users and databases
+echo 'create vagrant user'
+sudo -u postgres createuser -s vagrant
+echo 'create openstreetmap user'
+sudo -u postgres psql -c "CREATE USER openstreetmap WITH PASSWORD 'openstreetmap'"
+echo 'create databases'
+sudo -u postgres psql -c "CREATE DATABASE vagrant WITH OWNER vagrant"
+sudo -u postgres psql -c "CREATE DATABASE openstreetmap WITH OWNER openstreetmap"
+sudo -u postgres psql -c "CREATE DATABASE osm_test WITH OWNER openstreetmap"
+sudo -u postgres psql -c "GRANT openstreetmap TO vagrant"
+sudo -u postgres psql -c "create extension btree_gist" osm_test
+sudo -u postgres psql -c "create extension btree_gist" openstreetmap
 
-    # Workaround for attempted user imports failing with:
-    # ERROR: duplicate key value violates unique constraint "users_display_name_idx"
-    echo 'drop user display name index as a workaround'
-    psql -c "drop index users_display_name_idx" openstreetmap
+# Set up the database for osmosis
+sudo -u postgres psql -c "create extension postgis" openstreetmap
+sudo -u postgres psql -c "create extension hstore" openstreetmap
 
-    # Run osmosis import for whatever OSM files are in the `data` directory
-    # TODO: check if any files with exension exist first
+# Create the database tables for OSM an migrate to the specific APIDB schema version
+# that is the last APIDB version used by osmosis:
+# https://github.com/openstreetmap/osmosis/blob/2219470cef1f73f5d1319c57149c84b398e767ce/osmosis-apidb/src/main/java/org/openstreetmap/osmosis/apidb/v0_6/ApidbVersionConstants.java
+echo 'apply migrations to osmosis version'
+bundle exec rake db:migrate VERSION=20130328184137
+
+# Workaround for attempted user imports failing with:
+# ERROR: duplicate key value violates unique constraint "users_display_name_idx"
+echo 'drop user display name index as a workaround'
+sudo -u postgres psql -c "drop index users_display_name_idx" openstreetmap
+
+# Run osmosis import for whatever OSM files are in the `data` directory
+if [ -f data/*.osm ]; then
     echo 'import data directory OSM contents with osmosis'
     osmosis --read-xml data/*.osm --write-apidb \
         database="openstreetmap" user="openstreetmap" password="openstreetmap"
-    #osmosis --read-pbf data/*.pbf --write-apidb \
-    #    database="openstreetmap" user="openstreetmap" password="openstreetmap"
-
-    # Add back index removed for import.
-    # Should be safe, if uniqueness violations were from users changing their display name,
-    # then changing it back.
-    echo 'add back display name index'
-    psql -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
 fi
+if [ -f data/*.pbf ]; then
+    echo 'import data directory PBF contents with osmosis'
+    osmosis --read-pbf data/*.pbf --write-apidb \
+        database="openstreetmap" user="openstreetmap" password="openstreetmap"
+fi
+
+# Add back index removed for import.
+# Should be safe, if uniqueness violations were from users changing their display name,
+# then changing it back.
+echo 'add back display name index'
+sudo -u postgres psql -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
 
 
 # install PostgreSQL functions
 echo 'install functions'
-psql -d openstreetmap -f db/functions/functions.sql
+sudo -u postgres psql -d openstreetmap -f db/functions/functions.sql
 ################################################################################
 # *IF* you want a vagrant image which supports replication (or perhaps you're
 # using this script to provision some other server and want replication), then
@@ -105,4 +111,4 @@ echo 'apply remaining migrations'
 bundle exec rake db:migrate
 popd
 
-echo '\nall done\n'
+echo 'all done'
