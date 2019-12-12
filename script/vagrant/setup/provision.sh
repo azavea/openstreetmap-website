@@ -4,10 +4,15 @@
 set -e
 
 # set locale to UTF-8 compatible. apologies to non-english speakers...
-locale-gen en_GB.utf8
-update-locale LANG=en_GB.utf8 LC_ALL=en_GB.utf8
-export LANG=en_GB.utf8
-export LC_ALL=en_GB.utf8
+locale-gen en_US.utf8
+update-locale LANG=en_US.utf8 LC_ALL=en_US.utf8
+export LANG=en_US.utf8
+export LC_ALL=en_US.utf8
+
+# add repository for yarn
+# https://yarnpkg.com/lang/en/docs/install/#debian-stable
+curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
 
 # make sure we have up-to-date packages
 apt-get update
@@ -21,7 +26,7 @@ apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
                      apache2 apache2-dev build-essential git-core phantomjs \
                      postgresql postgresql-contrib libpq-dev \
                      libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
-                     openjdk-11-jdk openjdk-11-doc osmosis postgis
+                     openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
 gem2.5 install rake
 gem2.5 install --version "~> 1.16.2" bundler
 
@@ -92,9 +97,15 @@ if [ ! -f config/database.yml ]; then
     cp config/example.database.yml config/database.yml
 fi
 touch config/settings.local.yml
+
 # migrate the database from the osmosis version to the latest version
 echo 'apply remaining migrations'
 bundle exec rake db:migrate
-popd
 
+echo 'export i8ln'
+bundle exec rake i18n:js:export
+echo 'install npm packages'
+bundle exec rake yarn:install
+
+popd
 echo 'all done'
