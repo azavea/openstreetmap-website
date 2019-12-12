@@ -32,8 +32,8 @@ Vagrant.configure("2") do |config|
     config.cache.scope = :box
   end
 
-  # port forward for webrick on 3000
-  config.vm.network :forwarded_port, :guest => 3000, :host => 3000
+  # port forward for webrick on 3003
+  config.vm.network :forwarded_port, :guest => 3000, :host => 3003
 
   # provision using a simple shell script
   config.vm.provision :shell, :path => "script/vagrant/setup/provision.sh"

@@ -5,22 +5,22 @@ Start VM with `vagrant up`. Provisioning the VM will delete and recreate the OSM
 
 ## Running the development server
 
-From the host, run `srta/serve.sh` to start the local rails server on port 3000.
+From the host, run `srta/serve.sh` to start the local rails server on port 3003.
 
 
 ## Configuration
 
-Create an account at http://localhost:3000/user/new.
+Create an account at http://localhost:3003/user/new.
 
 Look in the rails logs for the confirmation email text. Find a link in it that looks like:
 
-`http://localhost:3000/user/USERNAME/confirm?confirm_string=SOME_STRING`
+`http://localhost:3003/user/USERNAME/confirm?confirm_string=SOME_STRING`
 
 Go to the link to complete registration.
 
 Under the user drop-down in the upper right, go to "My Settings."
 
-Go to 'oauth settings' under the header. Click to register an application for the iD editor. Use `http://localhost:3000` for all of the URLs.
+Go to 'oauth settings' under the header. Click to register an application for the iD editor. Use `http://localhost:3003` for all of the URLs.
 
 Note the consumer key for the OAuth application once created.
 
