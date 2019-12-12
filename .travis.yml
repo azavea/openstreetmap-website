@@ -15,15 +15,7 @@ env:
   global:
     - OSM_MEMCACHE_SERVERS="127.0.0.1"
 before_script:
-  - psql -U postgres -c "CREATE DATABASE openstreetmap"
-  - psql -U postgres -c "CREATE EXTENSION btree_gist" openstreetmap
-  - psql -U postgres -f db/functions/functions.sql openstreetmap
-  - cp config/travis.database.yml config/database.yml
-  - cp config/example.storage.yml config/storage.yml
-  - touch config/settings.local.yml
-  - bundle exec rake db:migrate
-  - bundle exec rake i18n:js:export
-  - bundle exec rake yarn:install
+  - ./script/vagrant/setup/provision.sh
 script:
   - bundle exec rubocop -f fuubar
   - bundle exec rake eslint
