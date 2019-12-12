@@ -22,16 +22,23 @@ apt-get upgrade -y
 
 # install packages as explained in INSTALL.md
 apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
-                     libmagickwand-dev libxml2-dev libxslt1-dev nodejs \
-                     apache2 apache2-dev build-essential git-core phantomjs \
+                     libmagickwand-dev libxml2-dev libxslt1-dev fontconfig nodejs \
+                     apache2 apache2-dev build-essential git-core \
                      postgresql postgresql-contrib libpq-dev \
                      libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
                      openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
-gem2.5 install rake
-gem2.5 install --version "~> 1.16.2" bundler
+
+# install a phantomjs version that will work headlessly
+pushd /home/vagrant
+wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
+tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
+sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
+popd
 
 ## install the bundle necessary for openstreetmap-website
 pushd /srv/openstreetmap-website
+gem2.5 install rake
+gem2.5 install --version "~> 1.16.2" bundler
 # do bundle install as a convenience
 bundle install --retry=10 --jobs=2
 
@@ -43,7 +50,7 @@ sudo -u postgres psql -f recreate_databases.sql
 echo 'add database extensions'
 sudo -u postgres psql -f add_extensions.sql openstreetmap
 sudo -u postgres psql -f add_extensions.sql osm_test
-pushd /srv/openstreetmap-website
+popd # back to /srv/openstreetmap-website
 
 # Create the database tables for OSM an migrate to the specific APIDB schema version
 # that is the last APIDB version used by osmosis:
@@ -96,6 +103,10 @@ sudo -u postgres psql -d openstreetmap -f db/functions/functions.sql
 if [ ! -f config/database.yml ]; then
     cp config/example.database.yml config/database.yml
 fi
+if [ ! -f config/storage.yml ]; then
+    cp config/example.storage.yml config/storage.yml
+fi
+
 touch config/settings.local.yml
 
 # migrate the database from the osmosis version to the latest version
