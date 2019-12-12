@@ -15,18 +15,18 @@ curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
 echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
 
 # make sure we have up-to-date packages
-apt-get update
+sudo apt-get update
 
 # upgrade all packages
-apt-get upgrade -y
+sudo apt-get upgrade -y
 
 # install packages as explained in INSTALL.md
-apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
-                     libmagickwand-dev libxml2-dev libxslt1-dev fontconfig nodejs \
-                     apache2 apache2-dev build-essential git-core \
-                     postgresql postgresql-contrib libpq-dev \
-                     libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
-                     openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
+sudo apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
+                        libmagickwand-dev libxml2-dev libxslt1-dev fontconfig nodejs \
+                        apache2 apache2-dev build-essential git-core \
+                        postgresql postgresql-contrib libpq-dev \
+                        libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
+                        openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
 
 # install a phantomjs version that will work headlessly
 pushd /tmp
