@@ -29,7 +29,7 @@ apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
                      openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
 
 # install a phantomjs version that will work headlessly
-pushd /home/vagrant
+pushd ~/
 wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
 tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
 sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
