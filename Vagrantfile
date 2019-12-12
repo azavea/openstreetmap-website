@@ -6,7 +6,7 @@ Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb, override|
     override.vm.box = "bento/ubuntu-19.10"
     override.vm.synced_folder ".", "/srv/openstreetmap-website"
-    vb.customize ["modifyvm", :id, "--memory", "2048"]
+    vb.customize ["modifyvm", :id, "--memory", "4096"]
     vb.customize ["modifyvm", :id, "--cpus", "2"]
     vb.customize ["modifyvm", :id, "--uartmode1", "disconnected"]
   end
@@ -22,7 +22,7 @@ Vagrant.configure("2") do |config|
 
   # use third party image and sshfs or NFS sharing for libvirt
   config.vm.provider "libvirt" do |_, override|
-    override.vm.box = "generic/ubuntu1804"
+    override.vm.box = "bento/ubuntu-19.10"
     override.vm.synced_folder ".", "/srv/openstreetmap-website", :type => sharing_type
   end
 
