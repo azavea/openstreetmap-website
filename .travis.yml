@@ -1,11 +1,11 @@
-dist: xenial
+dist: bionic
 language: ruby
 rvm:
   - 2.5.3
 cache:
   - bundler
 addons:
-  postgresql: 9.5
+  postgresql: 10
   apt:
     packages:
       - libarchive-dev
