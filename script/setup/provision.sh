@@ -32,11 +32,10 @@ if ! dpkg -s yarn; then
                             openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
 
     # install a phantomjs version that will work headlessly
-    pushd /tmp
     wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
     tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
     sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
-    popd
+    rm -r phantomjs-2.1.1-linux-x86_64*
 fi
 
 # Run SQL
