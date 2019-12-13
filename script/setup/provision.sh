@@ -78,7 +78,7 @@ bundle exec rake db:migrate VERSION=20130328184137
 # Workaround for attempted user imports failing with:
 # ERROR: duplicate key value violates unique constraint "users_display_name_idx"
 echo 'drop user display name index as a workaround'
-$PSQLCMD -c "drop index users_display_name_idx" openstreetmap
+$PSQLCMD -c "DROP INDEX IF EXISTS users_display_name_idx" openstreetmap
 
 # Run osmosis import for whatever OSM files are in the `data` directory
 if [ -f data/*.osm ]; then
