@@ -39,13 +39,13 @@ if ! dpkg -s yarn; then
 fi
 
 # Run SQL
-echo "current directory: $(pwd)"
+SQLDIR="$(pwd)/script/setup"
 echo 'drop and recreate databases and users'
-sudo -u postgres psql -f script/setup/recreate_databases.sql
+sudo -u postgres psql -f "$SQLDIR/recreate_databases.sql"
 
 echo 'add database extensions'
-sudo -u postgres psql -f script/setup/add_extensions.sql openstreetmap
-sudo -u postgres psql -f script/setup/add_extensions.sql osm_test
+sudo -u postgres psql -f "$SQLDIR/add_extensions.sql" openstreetmap
+sudo -u postgres psql -f "$SQLDIR/add_extensions.sql" osm_test
 
 ## install the bundle necessary for openstreetmap-website
 gem2.5 install rake
