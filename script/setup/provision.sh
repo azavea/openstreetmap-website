@@ -68,6 +68,10 @@ gem2.5 install rake
 gem2.5 install --version "~> 1.16.2" bundler
 # do bundle install as a convenience
 bundle install --retry=10 --jobs=2
+# Workaround for "Illegal instruction" ruby bug on Travis
+# See https://github.com/sass/sassc-ruby/issues/146
+gem uninstall sassc
+gem install sassc -- --disable-march-tune-native
 
 # Create the database tables for OSM an migrate to the specific APIDB schema version
 # that is the last APIDB version used by osmosis:
