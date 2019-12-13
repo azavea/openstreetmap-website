@@ -38,6 +38,17 @@ if ! dpkg -s yarn; then
     rm -r phantomjs-2.1.1-linux-x86_64*
 fi
 
+# set up sample configs
+if [ ! -f config/database.yml ]; then
+    cp config/example.database.yml config/database.yml
+fi
+if [ ! -f config/storage.yml ]; then
+    cp config/example.storage.yml config/storage.yml
+fi
+if [ ! -f config/settings.local.yml ]; then
+    touch config/settings.local.yml
+fi
+
 # Run SQL
 echo 'drop and recreate databases and users'
 
@@ -91,16 +102,6 @@ $PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)"
 # install PostgreSQL functions
 echo 'install functions'
 $PSQLCMD -d openstreetmap -f db/functions/functions.sql
-
-# set up sample configs
-if [ ! -f config/database.yml ]; then
-    cp config/example.database.yml config/database.yml
-fi
-if [ ! -f config/storage.yml ]; then
-    cp config/example.storage.yml config/storage.yml
-fi
-
-touch config/settings.local.yml
 
 # migrate the database from the osmosis version to the latest version
 echo 'apply remaining migrations'
