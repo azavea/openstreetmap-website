@@ -41,11 +41,12 @@ fi
 # Run SQL
 SQLDIR="$(pwd)/script/setup"
 echo 'drop and recreate databases and users'
-sudo -u postgres psql -f "$SQLDIR/recreate_databases.sql"
+cp ${SQLDIR}/*.sql /tmp/
+sudo -u postgres psql -f "/tmp/recreate_databases.sql"
 
 echo 'add database extensions'
-sudo -u postgres psql -f "$SQLDIR/add_extensions.sql" openstreetmap
-sudo -u postgres psql -f "$SQLDIR/add_extensions.sql" osm_test
+sudo -u postgres psql -f "/tmp/add_extensions.sql" openstreetmap
+sudo -u postgres psql -f "/tmp/add_extensions.sql" osm_test
 
 ## install the bundle necessary for openstreetmap-website
 gem2.5 install rake
