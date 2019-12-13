@@ -39,14 +39,18 @@ if ! dpkg -s yarn; then
 fi
 
 # Run SQL
-SQLDIR="$(pwd)/script/setup"
 echo 'drop and recreate databases and users'
-cp ${SQLDIR}/*.sql /tmp/
-sudo -u postgres psql -f "/tmp/recreate_databases.sql"
+
+PSQLCMD="psql -U postgres"
+if [ "$USER" = "root" ]; then
+    echo 'use postgres user in vagrant environment'
+    PSQLCMD="sudo -u postgres psql"
+fi
+$PSQLCMD -f "script/setup/recreate_databases.sql"
 
 echo 'add database extensions'
-sudo -u postgres psql -f "/tmp/add_extensions.sql" openstreetmap
-sudo -u postgres psql -f "/tmp/add_extensions.sql" osm_test
+$PSQLCMD -f "script/setup/add_extensions.sql" openstreetmap
+$PSQLCMD -f "script/setup/add_extensions.sql" osm_test
 
 ## install the bundle necessary for openstreetmap-website
 gem2.5 install rake
@@ -63,7 +67,7 @@ bundle exec rake db:migrate VERSION=20130328184137
 # Workaround for attempted user imports failing with:
 # ERROR: duplicate key value violates unique constraint "users_display_name_idx"
 echo 'drop user display name index as a workaround'
-sudo -u postgres psql -c "drop index users_display_name_idx" openstreetmap
+$PSQLCMD -c "drop index users_display_name_idx" openstreetmap
 
 # Run osmosis import for whatever OSM files are in the `data` directory
 if [ -f data/*.osm ]; then
@@ -81,12 +85,12 @@ fi
 # Should be safe, if uniqueness violations were from users changing their display name,
 # then changing it back.
 echo 'add back display name index'
-sudo -u postgres psql -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
+$PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
 
 
 # install PostgreSQL functions
 echo 'install functions'
-sudo -u postgres psql -d openstreetmap -f db/functions/functions.sql
+$PSQLCMD -d openstreetmap -f db/functions/functions.sql
 
 # set up sample configs
 if [ ! -f config/database.yml ]; then
