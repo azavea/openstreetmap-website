@@ -106,6 +106,7 @@ fi
 # install PostgreSQL functions
 echo 'install functions'
 $PSQLCMD -d openstreetmap -f db/functions/functions.sql
+$PSQLCMD -d osm_test -f db/functions/functions.sql
 
 # migrate the database from the osmosis version to the latest version
 echo 'apply remaining migrations'
