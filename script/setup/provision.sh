@@ -3,7 +3,7 @@
 # abort on error
 set -e
 
-# set locale to UTF-8 compatible. apologies to non-english speakers...
+# set locale to UTF-8 compatible
 sudo locale-gen en_US.utf8
 sudo update-locale LANG=en_US.utf8 LC_ALL=en_US.utf8
 export LANG=en_US.utf8
@@ -28,6 +28,14 @@ sudo apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
                         libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
                         openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
 
+# Run SQL
+echo 'drop and recreate databases and users'
+sudo -u postgres psql -f recreate_databases.sql
+
+echo 'add database extensions'
+sudo -u postgres psql -f add_extensions.sql openstreetmap
+sudo -u postgres psql -f add_extensions.sql osm_test
+
 # install a phantomjs version that will work headlessly
 pushd /tmp
 wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
@@ -35,22 +43,13 @@ tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
 sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
 popd
 
+pushd ../../ # top-level project directory
+
 ## install the bundle necessary for openstreetmap-website
-pushd /srv/openstreetmap-website
 gem2.5 install rake
 gem2.5 install --version "~> 1.16.2" bundler
 # do bundle install as a convenience
 bundle install --retry=10 --jobs=2
-
-# Run SQL
-pushd /srv/openstreetmap-website/script/vagrant/setup
-echo 'drop and recreate databases and users'
-sudo -u postgres psql -f recreate_databases.sql
-
-echo 'add database extensions'
-sudo -u postgres psql -f add_extensions.sql openstreetmap
-sudo -u postgres psql -f add_extensions.sql osm_test
-popd # back to /srv/openstreetmap-website
 
 # Create the database tables for OSM an migrate to the specific APIDB schema version
 # that is the last APIDB version used by osmosis:
@@ -85,19 +84,6 @@ sudo -u postgres psql -c "CREATE UNIQUE INDEX users_display_name_idx ON users (d
 # install PostgreSQL functions
 echo 'install functions'
 sudo -u postgres psql -d openstreetmap -f db/functions/functions.sql
-################################################################################
-# *IF* you want a vagrant image which supports replication (or perhaps you're
-# using this script to provision some other server and want replication), then
-# uncomment the following lines (until popd) and comment out the one above
-# (functions.sql).
-################################################################################
-#pushd db/functions
-#make
-#psql openstreetmap -c "CREATE OR REPLACE FUNCTION maptile_for_point(int8, int8, int4) RETURNS int4 AS '/srv/openstreetmap-website/db/functions/libpgosm.so', 'maptile_for_point' LANGUAGE C ST#RICT"
-#psql openstreetmap -c "CREATE OR REPLACE FUNCTION tile_for_point(int4, int4) RETURNS int8 AS '/srv/openstreetmap-website/db/functions/libpgosm.so', 'tile_for_point' LANGUAGE C STRICT"
-#psql openstreetmap -c "CREATE OR REPLACE FUNCTION xid_to_int4(xid) RETURNS int4 AS '/srv/openstreetmap-website/db/functions/libpgosm.so', 'xid_to_int4' LANGUAGE C STRICT"
-#popd
-
 
 # set up sample configs
 if [ ! -f config/database.yml ]; then
