@@ -63,6 +63,11 @@ echo 'add database extensions'
 $PSQLCMD -f "script/setup/add_extensions.sql" openstreetmap
 $PSQLCMD -f "script/setup/add_extensions.sql" osm_test
 
+# install PostgreSQL functions
+echo 'install functions'
+$PSQLCMD -d openstreetmap -f db/functions/functions.sql
+$PSQLCMD -d osm_test -f db/functions/functions.sql
+
 ## install the bundle necessary for openstreetmap-website
 gem2.5 install rake
 gem2.5 install --version "~> 1.16.2" bundler
@@ -71,7 +76,7 @@ bundle install --retry=10 --jobs=2
 # Workaround for "Illegal instruction" ruby bug on Travis
 # See https://github.com/sass/sassc-ruby/issues/146
 gem uninstall sassc
-gem install sassc -- --disable-march-tune-native
+gem install sassc
 
 # Create the database tables for OSM an migrate to the specific APIDB schema version
 # that is the last APIDB version used by osmosis:
@@ -106,11 +111,6 @@ if $IMPORTED_DATA; then
     echo 'add back display name index'
     $PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
 fi
-
-# install PostgreSQL functions
-echo 'install functions'
-$PSQLCMD -d openstreetmap -f db/functions/functions.sql
-$PSQLCMD -d osm_test -f db/functions/functions.sql
 
 # migrate the database from the osmosis version to the latest version
 echo 'apply remaining migrations'
