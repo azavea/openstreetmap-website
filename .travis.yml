@@ -5,7 +5,6 @@ rvm:
 cache:
   - bundler
 addons:
-  postgresql: 10
   apt:
     packages:
       - libarchive-dev
