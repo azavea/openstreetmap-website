@@ -75,6 +75,17 @@ CREATE TYPE public.gpx_visibility_enum AS ENUM (
 
 
 --
+-- Name: issue_status_enum; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.issue_status_enum AS ENUM (
+    'open',
+    'ignored',
+    'resolved'
+);
+
+
+--
 -- Name: note_event_enum; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -132,6 +143,87 @@ CREATE TYPE public.user_status_enum AS ENUM (
 );
 
 
+--
+-- Name: maptile_for_point(bigint, bigint, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.maptile_for_point(scaled_lat bigint, scaled_lon bigint, zoom integer) RETURNS integer
+    LANGUAGE plpgsql IMMUTABLE
+    AS $$
+DECLARE
+  lat CONSTANT DOUBLE PRECISION := scaled_lat / 10000000.0;
+  lon CONSTANT DOUBLE PRECISION := scaled_lon / 10000000.0;
+  zscale CONSTANT DOUBLE PRECISION := 2.0 ^ zoom;
+  pi CONSTANT DOUBLE PRECISION := 3.141592653589793;
+  r_per_d CONSTANT DOUBLE PRECISION := pi / 180.0;
+  x int4;
+  y int4;
+BEGIN
+  -- straight port of the C code. see db/functions/maptile.c
+  x := floor((lon + 180.0) * zscale / 360.0);
+  y := floor((1.0 - ln(tan(lat * r_per_d) + 1.0 / cos(lat * r_per_d)) / pi) * zscale / 2.0);
+
+  RETURN (x << zoom) | y;
+END;
+$$;
+
+
+--
+-- Name: tile_for_point(integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tile_for_point(scaled_lat integer, scaled_lon integer) RETURNS bigint
+    LANGUAGE plpgsql IMMUTABLE
+    AS $$
+DECLARE
+  x int8; -- quantized x from lon,
+  y int8; -- quantized y from lat,
+BEGIN
+  x := round(((scaled_lon / 10000000.0) + 180.0) * 65535.0 / 360.0);
+  y := round(((scaled_lat / 10000000.0) +  90.0) * 65535.0 / 180.0);
+
+  -- these bit-masks are special numbers used in the bit interleaving algorithm.
+  -- see https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
+  -- for the original algorithm and more details.
+  x := (x | (x << 8)) &   16711935; -- 0x00FF00FF
+  x := (x | (x << 4)) &  252645135; -- 0x0F0F0F0F
+  x := (x | (x << 2)) &  858993459; -- 0x33333333
+  x := (x | (x << 1)) & 1431655765; -- 0x55555555
+
+  y := (y | (y << 8)) &   16711935; -- 0x00FF00FF
+  y := (y | (y << 4)) &  252645135; -- 0x0F0F0F0F
+  y := (y | (y << 2)) &  858993459; -- 0x33333333
+  y := (y | (y << 1)) & 1431655765; -- 0x55555555
+
+  RETURN (x << 1) | y;
+END;
+$$;
+
+
+--
+-- Name: xid_to_int4(xid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.xid_to_int4(t xid) RETURNS integer
+    LANGUAGE plpgsql IMMUTABLE STRICT
+    AS $$
+DECLARE
+  tl bigint;
+  ti int;
+BEGIN
+  tl := t;
+
+  IF tl >= 2147483648 THEN
+    tl := tl - 4294967296;
+  END IF;
+
+  ti := tl;
+
+  RETURN ti;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_with_oids = false;
@@ -145,7 +237,8 @@ CREATE TABLE public.acls (
     address inet,
     k character varying NOT NULL,
     v character varying,
-    domain character varying
+    domain character varying,
+    mx character varying
 );
 
 
@@ -169,6 +262,74 @@ ALTER SEQUENCE public.acls_id_seq OWNED BY public.acls.id;
 
 
 --
+-- Name: active_storage_attachments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.active_storage_attachments (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    record_type character varying NOT NULL,
+    record_id bigint NOT NULL,
+    blob_id bigint NOT NULL,
+    created_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: active_storage_attachments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.active_storage_attachments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: active_storage_attachments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.active_storage_attachments_id_seq OWNED BY public.active_storage_attachments.id;
+
+
+--
+-- Name: active_storage_blobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.active_storage_blobs (
+    id bigint NOT NULL,
+    key character varying NOT NULL,
+    filename character varying NOT NULL,
+    content_type character varying,
+    metadata text,
+    byte_size bigint NOT NULL,
+    checksum character varying NOT NULL,
+    created_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: active_storage_blobs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.active_storage_blobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: active_storage_blobs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.active_storage_blobs_id_seq OWNED BY public.active_storage_blobs.id;
+
+
+--
 -- Name: ar_internal_metadata; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -178,6 +339,40 @@ CREATE TABLE public.ar_internal_metadata (
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL
 );
+
+
+--
+-- Name: changeset_comments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.changeset_comments (
+    id integer NOT NULL,
+    changeset_id bigint NOT NULL,
+    author_id bigint NOT NULL,
+    body text NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    visible boolean NOT NULL
+);
+
+
+--
+-- Name: changeset_comments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.changeset_comments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: changeset_comments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.changeset_comments_id_seq OWNED BY public.changeset_comments.id;
 
 
 --
@@ -228,6 +423,16 @@ ALTER SEQUENCE public.changesets_id_seq OWNED BY public.changesets.id;
 
 
 --
+-- Name: changesets_subscribers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.changesets_subscribers (
+    subscriber_id bigint NOT NULL,
+    changeset_id bigint NOT NULL
+);
+
+
+--
 -- Name: client_applications; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -270,39 +475,6 @@ CREATE SEQUENCE public.client_applications_id_seq
 --
 
 ALTER SEQUENCE public.client_applications_id_seq OWNED BY public.client_applications.id;
-
-
---
--- Name: countries; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.countries (
-    id bigint NOT NULL,
-    code character varying(2) NOT NULL,
-    min_lat double precision NOT NULL,
-    max_lat double precision NOT NULL,
-    min_lon double precision NOT NULL,
-    max_lon double precision NOT NULL
-);
-
-
---
--- Name: countries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.countries_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: countries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.countries_id_seq OWNED BY public.countries.id;
 
 
 --
@@ -462,6 +634,45 @@ ALTER SEQUENCE public.current_ways_id_seq OWNED BY public.current_ways.id;
 
 
 --
+-- Name: delayed_jobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.delayed_jobs (
+    id bigint NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    handler text NOT NULL,
+    last_error text,
+    run_at timestamp without time zone,
+    locked_at timestamp without time zone,
+    failed_at timestamp without time zone,
+    locked_by character varying,
+    queue character varying,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: delayed_jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.delayed_jobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: delayed_jobs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.delayed_jobs_id_seq OWNED BY public.delayed_jobs.id;
+
+
+--
 -- Name: diary_comments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -473,7 +684,7 @@ CREATE TABLE public.diary_comments (
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL,
     visible boolean DEFAULT true NOT NULL,
-    body_format public.format_enum DEFAULT 'html'::public.format_enum NOT NULL
+    body_format public.format_enum DEFAULT 'markdown'::public.format_enum NOT NULL
 );
 
 
@@ -511,7 +722,7 @@ CREATE TABLE public.diary_entries (
     longitude double precision,
     language_code character varying DEFAULT 'en'::character varying NOT NULL,
     visible boolean DEFAULT true NOT NULL,
-    body_format public.format_enum DEFAULT 'html'::public.format_enum NOT NULL
+    body_format public.format_enum DEFAULT 'markdown'::public.format_enum NOT NULL
 );
 
 
@@ -532,6 +743,16 @@ CREATE SEQUENCE public.diary_entries_id_seq
 --
 
 ALTER SEQUENCE public.diary_entries_id_seq OWNED BY public.diary_entries.id;
+
+
+--
+-- Name: diary_entry_subscriptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.diary_entry_subscriptions (
+    user_id bigint NOT NULL,
+    diary_entry_id bigint NOT NULL
+);
 
 
 --
@@ -648,6 +869,80 @@ ALTER SEQUENCE public.gpx_files_id_seq OWNED BY public.gpx_files.id;
 
 
 --
+-- Name: issue_comments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.issue_comments (
+    id integer NOT NULL,
+    issue_id integer NOT NULL,
+    user_id integer NOT NULL,
+    body text NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: issue_comments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.issue_comments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: issue_comments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.issue_comments_id_seq OWNED BY public.issue_comments.id;
+
+
+--
+-- Name: issues; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.issues (
+    id integer NOT NULL,
+    reportable_type character varying NOT NULL,
+    reportable_id integer NOT NULL,
+    reported_user_id integer,
+    status public.issue_status_enum DEFAULT 'open'::public.issue_status_enum NOT NULL,
+    assigned_role public.user_role_enum NOT NULL,
+    resolved_at timestamp without time zone,
+    resolved_by integer,
+    updated_by integer,
+    reports_count integer DEFAULT 0,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: issues_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.issues_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: issues_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.issues_id_seq OWNED BY public.issues.id;
+
+
+--
 -- Name: languages; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -672,7 +967,7 @@ CREATE TABLE public.messages (
     to_user_id bigint NOT NULL,
     to_user_visible boolean DEFAULT true NOT NULL,
     from_user_visible boolean DEFAULT true NOT NULL,
-    body_format public.format_enum DEFAULT 'html'::public.format_enum NOT NULL
+    body_format public.format_enum DEFAULT 'markdown'::public.format_enum NOT NULL
 );
 
 
@@ -954,6 +1249,41 @@ CREATE TABLE public.relations (
 
 
 --
+-- Name: reports; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.reports (
+    id integer NOT NULL,
+    issue_id integer NOT NULL,
+    user_id integer NOT NULL,
+    details text NOT NULL,
+    category character varying NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: reports_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.reports_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.reports_id_seq OWNED BY public.reports.id;
+
+
+--
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -976,7 +1306,7 @@ CREATE TABLE public.user_blocks (
     revoker_id bigint,
     created_at timestamp without time zone,
     updated_at timestamp without time zone,
-    reason_format public.format_enum DEFAULT 'html'::public.format_enum NOT NULL
+    reason_format public.format_enum DEFAULT 'markdown'::public.format_enum NOT NULL
 );
 
 
@@ -1092,9 +1422,7 @@ CREATE TABLE public.users (
     home_lat double precision,
     home_lon double precision,
     home_zoom smallint DEFAULT 3,
-    nearby integer DEFAULT 50,
     pass_salt character varying,
-    image_file_name text,
     email_valid boolean DEFAULT false NOT NULL,
     new_email character varying,
     creation_ip character varying,
@@ -1102,15 +1430,17 @@ CREATE TABLE public.users (
     status public.user_status_enum DEFAULT 'pending'::public.user_status_enum NOT NULL,
     terms_agreed timestamp without time zone,
     consider_pd boolean DEFAULT false NOT NULL,
-    openid_url character varying,
+    auth_uid character varying,
     preferred_editor character varying,
     terms_seen boolean DEFAULT false NOT NULL,
-    description_format public.format_enum DEFAULT 'html'::public.format_enum NOT NULL,
-    image_fingerprint character varying,
+    description_format public.format_enum DEFAULT 'markdown'::public.format_enum NOT NULL,
     changesets_count integer DEFAULT 0 NOT NULL,
     traces_count integer DEFAULT 0 NOT NULL,
     diary_entries_count integer DEFAULT 0 NOT NULL,
-    image_use_gravatar boolean DEFAULT true NOT NULL
+    image_use_gravatar boolean DEFAULT false NOT NULL,
+    auth_provider character varying,
+    home_tile bigint,
+    tou_agreed timestamp without time zone
 );
 
 
@@ -1179,6 +1509,27 @@ ALTER TABLE ONLY public.acls ALTER COLUMN id SET DEFAULT nextval('public.acls_id
 
 
 --
+-- Name: active_storage_attachments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.active_storage_attachments ALTER COLUMN id SET DEFAULT nextval('public.active_storage_attachments_id_seq'::regclass);
+
+
+--
+-- Name: active_storage_blobs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.active_storage_blobs ALTER COLUMN id SET DEFAULT nextval('public.active_storage_blobs_id_seq'::regclass);
+
+
+--
+-- Name: changeset_comments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changeset_comments ALTER COLUMN id SET DEFAULT nextval('public.changeset_comments_id_seq'::regclass);
+
+
+--
 -- Name: changesets id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1190,13 +1541,6 @@ ALTER TABLE ONLY public.changesets ALTER COLUMN id SET DEFAULT nextval('public.c
 --
 
 ALTER TABLE ONLY public.client_applications ALTER COLUMN id SET DEFAULT nextval('public.client_applications_id_seq'::regclass);
-
-
---
--- Name: countries id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.countries ALTER COLUMN id SET DEFAULT nextval('public.countries_id_seq'::regclass);
 
 
 --
@@ -1218,6 +1562,13 @@ ALTER TABLE ONLY public.current_relations ALTER COLUMN id SET DEFAULT nextval('p
 --
 
 ALTER TABLE ONLY public.current_ways ALTER COLUMN id SET DEFAULT nextval('public.current_ways_id_seq'::regclass);
+
+
+--
+-- Name: delayed_jobs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.delayed_jobs ALTER COLUMN id SET DEFAULT nextval('public.delayed_jobs_id_seq'::regclass);
 
 
 --
@@ -1253,6 +1604,20 @@ ALTER TABLE ONLY public.gpx_file_tags ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 ALTER TABLE ONLY public.gpx_files ALTER COLUMN id SET DEFAULT nextval('public.gpx_files_id_seq'::regclass);
+
+
+--
+-- Name: issue_comments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issue_comments ALTER COLUMN id SET DEFAULT nextval('public.issue_comments_id_seq'::regclass);
+
+
+--
+-- Name: issues id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issues ALTER COLUMN id SET DEFAULT nextval('public.issues_id_seq'::regclass);
 
 
 --
@@ -1298,6 +1663,13 @@ ALTER TABLE ONLY public.redactions ALTER COLUMN id SET DEFAULT nextval('public.r
 
 
 --
+-- Name: reports id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reports ALTER COLUMN id SET DEFAULT nextval('public.reports_id_seq'::regclass);
+
+
+--
 -- Name: user_blocks id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1334,11 +1706,35 @@ ALTER TABLE ONLY public.acls
 
 
 --
+-- Name: active_storage_attachments active_storage_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.active_storage_attachments
+    ADD CONSTRAINT active_storage_attachments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: active_storage_blobs active_storage_blobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.active_storage_blobs
+    ADD CONSTRAINT active_storage_blobs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ar_internal_metadata ar_internal_metadata_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.ar_internal_metadata
     ADD CONSTRAINT ar_internal_metadata_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: changeset_comments changeset_comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changeset_comments
+    ADD CONSTRAINT changeset_comments_pkey PRIMARY KEY (id);
 
 
 --
@@ -1355,14 +1751,6 @@ ALTER TABLE ONLY public.changesets
 
 ALTER TABLE ONLY public.client_applications
     ADD CONSTRAINT client_applications_pkey PRIMARY KEY (id);
-
-
---
--- Name: countries countries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.countries
-    ADD CONSTRAINT countries_pkey PRIMARY KEY (id);
 
 
 --
@@ -1430,6 +1818,14 @@ ALTER TABLE ONLY public.current_ways
 
 
 --
+-- Name: delayed_jobs delayed_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.delayed_jobs
+    ADD CONSTRAINT delayed_jobs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: diary_comments diary_comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1443,6 +1839,14 @@ ALTER TABLE ONLY public.diary_comments
 
 ALTER TABLE ONLY public.diary_entries
     ADD CONSTRAINT diary_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: diary_entry_subscriptions diary_entry_subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.diary_entry_subscriptions
+    ADD CONSTRAINT diary_entry_subscriptions_pkey PRIMARY KEY (user_id, diary_entry_id);
 
 
 --
@@ -1467,6 +1871,22 @@ ALTER TABLE ONLY public.gpx_file_tags
 
 ALTER TABLE ONLY public.gpx_files
     ADD CONSTRAINT gpx_files_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: issue_comments issue_comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issue_comments
+    ADD CONSTRAINT issue_comments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: issues issues_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issues
+    ADD CONSTRAINT issues_pkey PRIMARY KEY (id);
 
 
 --
@@ -1563,6 +1983,14 @@ ALTER TABLE ONLY public.relation_tags
 
 ALTER TABLE ONLY public.relations
     ADD CONSTRAINT relations_pkey PRIMARY KEY (relation_id, version);
+
+
+--
+-- Name: reports reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reports
+    ADD CONSTRAINT reports_pkey PRIMARY KEY (id);
 
 
 --
@@ -1687,13 +2115,6 @@ CREATE INDEX changesets_user_id_id_idx ON public.changesets USING btree (user_id
 
 
 --
--- Name: countries_code_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX countries_code_idx ON public.countries USING btree (code);
-
-
---
 -- Name: current_nodes_tile_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1733,6 +2154,13 @@ CREATE INDEX current_way_nodes_node_idx ON public.current_way_nodes USING btree 
 --
 
 CREATE INDEX current_ways_timestamp_idx ON public.current_ways USING btree ("timestamp");
+
+
+--
+-- Name: delayed_jobs_priority; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX delayed_jobs_priority ON public.delayed_jobs USING btree (priority, run_at);
 
 
 --
@@ -1813,10 +2241,150 @@ CREATE INDEX gpx_files_visible_visibility_idx ON public.gpx_files USING btree (v
 
 
 --
+-- Name: index_acls_on_address; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_acls_on_address ON public.acls USING gist (address inet_ops);
+
+
+--
+-- Name: index_acls_on_domain; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_acls_on_domain ON public.acls USING btree (domain);
+
+
+--
+-- Name: index_acls_on_mx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_acls_on_mx ON public.acls USING btree (mx);
+
+
+--
+-- Name: index_active_storage_attachments_on_blob_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_active_storage_attachments_on_blob_id ON public.active_storage_attachments USING btree (blob_id);
+
+
+--
+-- Name: index_active_storage_attachments_uniqueness; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_active_storage_attachments_uniqueness ON public.active_storage_attachments USING btree (record_type, record_id, name, blob_id);
+
+
+--
+-- Name: index_active_storage_blobs_on_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_active_storage_blobs_on_key ON public.active_storage_blobs USING btree (key);
+
+
+--
+-- Name: index_changeset_comments_on_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_changeset_comments_on_created_at ON public.changeset_comments USING btree (created_at);
+
+
+--
+-- Name: index_changesets_subscribers_on_changeset_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_changesets_subscribers_on_changeset_id ON public.changesets_subscribers USING btree (changeset_id);
+
+
+--
+-- Name: index_changesets_subscribers_on_subscriber_id_and_changeset_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_changesets_subscribers_on_subscriber_id_and_changeset_id ON public.changesets_subscribers USING btree (subscriber_id, changeset_id);
+
+
+--
 -- Name: index_client_applications_on_key; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX index_client_applications_on_key ON public.client_applications USING btree (key);
+
+
+--
+-- Name: index_client_applications_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_client_applications_on_user_id ON public.client_applications USING btree (user_id);
+
+
+--
+-- Name: index_diary_entry_subscriptions_on_diary_entry_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_diary_entry_subscriptions_on_diary_entry_id ON public.diary_entry_subscriptions USING btree (diary_entry_id);
+
+
+--
+-- Name: index_issue_comments_on_issue_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issue_comments_on_issue_id ON public.issue_comments USING btree (issue_id);
+
+
+--
+-- Name: index_issue_comments_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issue_comments_on_user_id ON public.issue_comments USING btree (user_id);
+
+
+--
+-- Name: index_issues_on_assigned_role; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issues_on_assigned_role ON public.issues USING btree (assigned_role);
+
+
+--
+-- Name: index_issues_on_reportable_type_and_reportable_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issues_on_reportable_type_and_reportable_id ON public.issues USING btree (reportable_type, reportable_id);
+
+
+--
+-- Name: index_issues_on_reported_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issues_on_reported_user_id ON public.issues USING btree (reported_user_id);
+
+
+--
+-- Name: index_issues_on_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issues_on_status ON public.issues USING btree (status);
+
+
+--
+-- Name: index_issues_on_updated_by; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_issues_on_updated_by ON public.issues USING btree (updated_by);
+
+
+--
+-- Name: index_note_comments_on_body; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_note_comments_on_body ON public.note_comments USING gin (to_tsvector('english'::regconfig, body));
+
+
+--
+-- Name: index_note_comments_on_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_note_comments_on_created_at ON public.note_comments USING btree (created_at);
 
 
 --
@@ -1831,6 +2399,27 @@ CREATE UNIQUE INDEX index_oauth_nonces_on_nonce_and_timestamp ON public.oauth_no
 --
 
 CREATE UNIQUE INDEX index_oauth_tokens_on_token ON public.oauth_tokens USING btree (token);
+
+
+--
+-- Name: index_oauth_tokens_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_oauth_tokens_on_user_id ON public.oauth_tokens USING btree (user_id);
+
+
+--
+-- Name: index_reports_on_issue_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_reports_on_issue_id ON public.reports USING btree (issue_id);
+
+
+--
+-- Name: index_reports_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_reports_on_user_id ON public.reports USING btree (user_id);
 
 
 --
@@ -1946,13 +2535,6 @@ CREATE INDEX user_id_idx ON public.friends USING btree (friend_user_id);
 
 
 --
--- Name: user_openid_url_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX user_openid_url_idx ON public.users USING btree (openid_url);
-
-
---
 -- Name: user_roles_id_role_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1971,6 +2553,13 @@ CREATE UNIQUE INDEX user_tokens_token_idx ON public.user_tokens USING btree (tok
 --
 
 CREATE INDEX user_tokens_user_id_idx ON public.user_tokens USING btree (user_id);
+
+
+--
+-- Name: users_auth_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX users_auth_idx ON public.users USING btree (auth_provider, auth_uid);
 
 
 --
@@ -2002,6 +2591,13 @@ CREATE INDEX users_email_lower_idx ON public.users USING btree (lower((email)::t
 
 
 --
+-- Name: users_home_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX users_home_idx ON public.users USING btree (home_tile);
+
+
+--
 -- Name: way_nodes_node_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2023,11 +2619,43 @@ CREATE INDEX ways_timestamp_idx ON public.ways USING btree ("timestamp");
 
 
 --
+-- Name: changeset_comments changeset_comments_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changeset_comments
+    ADD CONSTRAINT changeset_comments_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.users(id);
+
+
+--
+-- Name: changeset_comments changeset_comments_changeset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changeset_comments
+    ADD CONSTRAINT changeset_comments_changeset_id_fkey FOREIGN KEY (changeset_id) REFERENCES public.changesets(id);
+
+
+--
 -- Name: changeset_tags changeset_tags_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.changeset_tags
     ADD CONSTRAINT changeset_tags_id_fkey FOREIGN KEY (changeset_id) REFERENCES public.changesets(id);
+
+
+--
+-- Name: changesets_subscribers changesets_subscribers_changeset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changesets_subscribers
+    ADD CONSTRAINT changesets_subscribers_changeset_id_fkey FOREIGN KEY (changeset_id) REFERENCES public.changesets(id);
+
+
+--
+-- Name: changesets_subscribers changesets_subscribers_subscriber_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.changesets_subscribers
+    ADD CONSTRAINT changesets_subscribers_subscriber_id_fkey FOREIGN KEY (subscriber_id) REFERENCES public.users(id);
 
 
 --
@@ -2151,6 +2779,30 @@ ALTER TABLE ONLY public.diary_entries
 
 
 --
+-- Name: diary_entry_subscriptions diary_entry_subscriptions_diary_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.diary_entry_subscriptions
+    ADD CONSTRAINT diary_entry_subscriptions_diary_entry_id_fkey FOREIGN KEY (diary_entry_id) REFERENCES public.diary_entries(id);
+
+
+--
+-- Name: diary_entry_subscriptions diary_entry_subscriptions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.diary_entry_subscriptions
+    ADD CONSTRAINT diary_entry_subscriptions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: active_storage_attachments fk_rails_c3b3935057; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.active_storage_attachments
+    ADD CONSTRAINT fk_rails_c3b3935057 FOREIGN KEY (blob_id) REFERENCES public.active_storage_blobs(id);
+
+
+--
 -- Name: friends friends_friend_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2188,6 +2840,46 @@ ALTER TABLE ONLY public.gpx_file_tags
 
 ALTER TABLE ONLY public.gpx_files
     ADD CONSTRAINT gpx_files_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: issue_comments issue_comments_issue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issue_comments
+    ADD CONSTRAINT issue_comments_issue_id_fkey FOREIGN KEY (issue_id) REFERENCES public.issues(id);
+
+
+--
+-- Name: issue_comments issue_comments_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issue_comments
+    ADD CONSTRAINT issue_comments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: issues issues_reported_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issues
+    ADD CONSTRAINT issues_reported_user_id_fkey FOREIGN KEY (reported_user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: issues issues_resolved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issues
+    ADD CONSTRAINT issues_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.users(id);
+
+
+--
+-- Name: issues issues_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issues
+    ADD CONSTRAINT issues_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
 
 
 --
@@ -2300,6 +2992,22 @@ ALTER TABLE ONLY public.relations
 
 ALTER TABLE ONLY public.relations
     ADD CONSTRAINT relations_redaction_id_fkey FOREIGN KEY (redaction_id) REFERENCES public.redactions(id);
+
+
+--
+-- Name: reports reports_issue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reports
+    ADD CONSTRAINT reports_issue_id_fkey FOREIGN KEY (issue_id) REFERENCES public.issues(id);
+
+
+--
+-- Name: reports reports_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reports
+    ADD CONSTRAINT reports_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -2435,6 +3143,28 @@ INSERT INTO "schema_migrations" (version) VALUES
 ('20121202155309'),
 ('20121203124841'),
 ('20130328184137'),
+('20131212124700'),
+('20140115192822'),
+('20140117185510'),
+('20140210003018'),
+('20140507110937'),
+('20140519141742'),
+('20150110152606'),
+('20150111192335'),
+('20150222101847'),
+('20150818224516'),
+('20160822153055'),
+('20161002153425'),
+('20161011010929'),
+('20170222134109'),
+('20180204153242'),
+('20181020114000'),
+('20181031113522'),
+('20190518115041'),
+('20190623093642'),
+('20190702193519'),
+('20190716173946'),
+('20191120140058'),
 ('21'),
 ('22'),
 ('23'),
