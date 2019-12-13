@@ -15,7 +15,7 @@ env:
   global:
     - OSM_MEMCACHE_SERVERS="127.0.0.1"
 before_script:
-  - ./script/vagrant/setup/provision.sh
+  - ./script/setup/provision.sh
 script:
   - bundle exec rubocop -f fuubar
   - bundle exec rake eslint

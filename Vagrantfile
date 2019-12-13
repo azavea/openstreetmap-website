@@ -36,5 +36,6 @@ Vagrant.configure("2") do |config|
   config.vm.network :forwarded_port, :guest => 3000, :host => 3003
 
   # provision using a simple shell script
-  config.vm.provision :shell, :path => "script/vagrant/setup/provision.sh"
+  config.vm.provision :shell,
+    :inline => "cd /srv/openstreetmap-website && /bin/sh script/setup/provision.sh"
 end

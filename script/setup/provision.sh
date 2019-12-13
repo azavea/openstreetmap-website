@@ -9,26 +9,40 @@ sudo update-locale LANG=en_US.utf8 LC_ALL=en_US.utf8
 export LANG=en_US.utf8
 export LC_ALL=en_US.utf8
 
-# add repository for yarn
-# https://yarnpkg.com/lang/en/docs/install/#debian-stable
-curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
-echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+# check if yarn is installed
+if ! dpkg -s yarn; then
+    echo 'install packages'
+    # add repository for yarn
+    # https://yarnpkg.com/lang/en/docs/install/#debian-stable
+    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
 
-# make sure we have up-to-date packages
-sudo apt-get update
+    # make sure we have up-to-date packages
+    sudo apt-get update
 
-# upgrade all packages
-sudo apt-get upgrade -y
+    # upgrade all packages
+    sudo apt-get upgrade -y
 
-# install packages as explained in INSTALL.md
-sudo apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
-                        libmagickwand-dev libxml2-dev libxslt1-dev fontconfig nodejs \
-                        apache2 apache2-dev build-essential git-core \
-                        postgresql postgresql-contrib libpq-dev \
-                        libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
-                        openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
+    # install packages as explained in INSTALL.md
+    sudo apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
+                            libmagickwand-dev libxml2-dev libxslt1-dev fontconfig nodejs \
+                            apache2 apache2-dev build-essential git-core \
+                            postgresql postgresql-contrib libpq-dev \
+                            libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
+                            openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
+
+    # install a phantomjs version that will work headlessly
+    cd /tmp
+    wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
+    tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
+    sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
+fi
 
 # Run SQL
+CURDIR="$(dirname "$(realpath "${0}")")"
+echo "go to ${CURDIR}"
+cd "${CURDIR}"
+echo "current directory: $(pwd)"
 echo 'drop and recreate databases and users'
 sudo -u postgres psql -f recreate_databases.sql
 
@@ -36,14 +50,7 @@ echo 'add database extensions'
 sudo -u postgres psql -f add_extensions.sql openstreetmap
 sudo -u postgres psql -f add_extensions.sql osm_test
 
-# install a phantomjs version that will work headlessly
-pushd /tmp
-wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
-tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
-sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
-popd
-
-pushd ../../ # top-level project directory
+cd "../../" # top-level project directory
 
 ## install the bundle necessary for openstreetmap-website
 gem2.5 install rake
@@ -104,5 +111,4 @@ bundle exec rake i18n:js:export
 echo 'install npm packages'
 bundle exec rake yarn:install
 
-popd
 echo 'all done'
