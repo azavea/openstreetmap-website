@@ -32,25 +32,21 @@ if ! dpkg -s yarn; then
                             openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
 
     # install a phantomjs version that will work headlessly
-    cd /tmp
+    pushd /tmp
     wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
     tar jxvf phantomjs-2.1.1-linux-x86_64.tar.bz2
     sudo cp phantomjs-2.1.1-linux-x86_64/bin/phantomjs /usr/bin/
+    popd
 fi
 
 # Run SQL
-CURDIR="$(dirname "$(realpath "${0}")")"
-echo "go to ${CURDIR}"
-cd "${CURDIR}"
 echo "current directory: $(pwd)"
 echo 'drop and recreate databases and users'
-sudo -u postgres psql -f recreate_databases.sql
+sudo -u postgres psql -f script/setup/recreate_databases.sql
 
 echo 'add database extensions'
-sudo -u postgres psql -f add_extensions.sql openstreetmap
-sudo -u postgres psql -f add_extensions.sql osm_test
-
-cd "../../" # top-level project directory
+sudo -u postgres psql -f script/setup/add_extensions.sql openstreetmap
+sudo -u postgres psql -f script/setup/add_extensions.sql osm_test
 
 ## install the bundle necessary for openstreetmap-website
 gem2.5 install rake

@@ -37,5 +37,5 @@ Vagrant.configure("2") do |config|
 
   # provision using a simple shell script
   config.vm.provision :shell,
-    :inline => "cd /srv/openstreetmap-website && /bin/sh script/setup/provision.sh"
+    :inline => "cd /srv/openstreetmap-website && ./script/setup/provision.sh"
 end
