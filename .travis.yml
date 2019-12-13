@@ -9,8 +9,10 @@ addons:
   apt:
     packages:
       - libarchive-dev
+      - postgresql-9.6-postgis-2.3
 services:
   - memcached
+  - postgresql
 env:
   global:
     - OSM_MEMCACHE_SERVERS="127.0.0.1"
