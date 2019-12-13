@@ -81,12 +81,15 @@ echo 'drop user display name index as a workaround'
 $PSQLCMD -c "DROP INDEX IF EXISTS users_display_name_idx" openstreetmap
 
 # Run osmosis import for whatever OSM files are in the `data` directory
+IMPORTED_DATA=false
 if [ -f data/*.osm ]; then
+    IMPORTED_DATA=true
     echo 'import data directory OSM contents with osmosis'
     osmosis --read-xml data/*.osm --write-apidb \
         database="openstreetmap" user="openstreetmap" password="openstreetmap"
 fi
 if [ -f data/*.pbf ]; then
+    IMPORTED_DATA=true
     echo 'import data directory PBF contents with osmosis'
     osmosis --read-pbf data/*.pbf --write-apidb \
         database="openstreetmap" user="openstreetmap" password="openstreetmap"
@@ -95,9 +98,10 @@ fi
 # Add back index removed for import.
 # Should be safe, if uniqueness violations were from users changing their display name,
 # then changing it back.
-echo 'add back display name index'
-$PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
-
+if $IMPORTED_DATA; then
+    echo 'add back display name index'
+    $PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
+fi
 
 # install PostgreSQL functions
 echo 'install functions'
