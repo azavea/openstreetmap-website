@@ -24,7 +24,7 @@ Go to 'oauth settings' under the header. Click to register an application for th
 
 Note the consumer key for the OAuth application once created.
 
-Edit `config/settings.local.ym` (which should exist but be empty after provisining), and add a line for the newly created iD editor OAuth app:
+Edit `config/settings.local.yml` (which should exist but be empty after provisining), and add a line for the newly created iD editor OAuth app:
 
 `id_key: OAUTH_KEY`
 
