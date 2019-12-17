@@ -27,9 +27,9 @@ if ! dpkg -s yarn; then
     sudo apt-get install -y ruby2.5 libruby2.5 ruby2.5-dev \
                             libmagickwand-dev libxml2-dev libxslt1-dev fontconfig nodejs \
                             apache2 apache2-dev build-essential git-core \
-                            postgresql postgresql-contrib libpq-dev \
+                            postgresql-10 postgresql-contrib-10 libpq-dev \
                             libsasl2-dev imagemagick libffi-dev libgd-dev libarchive-dev libbz2-dev \
-                            openjdk-11-jdk openjdk-11-doc osmosis postgis yarn
+                            openjdk-11-jdk openjdk-11-doc osmosis postgresql-10-postgis-2.4 yarn
 
     # install a phantomjs version that will work headlessly
     wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-2.1.1-linux-x86_64.tar.bz2
