@@ -5,11 +5,11 @@ rvm:
 cache:
   - bundler
 addons:
-  postgresql: 9.6
+  postgresql: 12
   apt:
     packages:
       - libarchive-dev
-      - postgresql-9.6-postgis-2.4
+      - postgis
 services:
   - memcached
   - postgresql
