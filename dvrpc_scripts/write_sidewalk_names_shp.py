@@ -35,7 +35,7 @@ if not os.path.isfile(SHP_FILE):
     with open(ZIPFILE, 'wb') as zf:
         for chunk in req.iter_content(chunk_size=128):
             zf.write(chunk)
-        print('Done donwloading sidewalks Shapefile. Extracting...')
+        print('Done downloading sidewalks Shapefile. Extracting...')
     with zipfile.ZipFile(ZIPFILE, 'r') as zipref:
         zipref.extractall(SHP_DIRECTORY)
         print('Zipped Shapefile extracted.')
