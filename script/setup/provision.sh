@@ -100,12 +100,17 @@ if [ -f data/*.pbf ]; then
         database="openstreetmap" user="openstreetmap" password="openstreetmap"
 fi
 
-# Add back index removed for import.
-# Should be safe, if uniqueness violations were from users changing their display name,
-# then changing it back.
 if $IMPORTED_DATA; then
     echo 'add back display name index'
+    # Add back index removed for import.
+    # Should be safe, if uniqueness violations were from users changing their display name,
+    # then changing it back.
     $PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
+    # Set the changeset sequence ID to start incrementing after the last used ID in the import.
+    # See: https://github.com/openstreetmap/openstreetmap-website/issues/1542
+    LAST_CHANGESET=$($PSQLCMD -Atq -d openstreetmap -c "SELECT MAX(id) FROM changesets")
+    echo 'update changeset sequence'
+    $PSQLCMD -d openstreetmap -c "SELECT setval('changesets_id_seq', $LAST_CHANGESET)"
 fi
 
 # migrate the database from the osmosis version to the latest version
