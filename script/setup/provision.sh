@@ -100,6 +100,41 @@ if [ -f data/*.pbf ]; then
         database="openstreetmap" user="openstreetmap" password="openstreetmap"
 fi
 
+# Update the sequence for the given table (table name expected as first parameter)
+# to the last value currently in the table.
+function update_sequence {
+    echo "update sequence for ${1}"
+    local last_seq_val=$($PSQLCMD -Atq -d openstreetmap -c "SELECT MAX(id) FROM ${1}")
+    if [ ! -z "$last_seq_val" ]; then
+        $PSQLCMD -d openstreetmap -c "SELECT setval('$1_id_seq', $last_seq_val)"
+    fi
+}
+
+# Tables in the database that use sequenced IDs and may need updating after import.
+# Note that some tables that use sequenced IDs that exist in the final database
+# were added by migrations run below, and do not exist yet in the database after import,
+# and so are not included here.
+declare -a SEQUENCE_TABLES=(
+    "acls"
+    "changesets"
+    "current_nodes"
+    "current_relations"
+    "current_ways"
+    "diary_comments"
+    "diary_entries"
+    "friends"
+    "gpx_file_tags"
+    "gpx_files"
+    "messages"
+    "note_comments"
+    "notes"
+    "redactions"
+    "user_blocks"
+    "user_roles"
+    "user_tokens"
+    "users"
+)
+
 if $IMPORTED_DATA; then
     echo 'add back display name index'
     # Add back index removed for import.
@@ -108,9 +143,13 @@ if $IMPORTED_DATA; then
     $PSQLCMD -c "CREATE UNIQUE INDEX users_display_name_idx ON users (display_name)" openstreetmap
     # Set the changeset sequence ID to start incrementing after the last used ID in the import.
     # See: https://github.com/openstreetmap/openstreetmap-website/issues/1542
-    LAST_CHANGESET=$($PSQLCMD -Atq -d openstreetmap -c "SELECT MAX(id) FROM changesets")
-    echo 'update changeset sequence'
-    $PSQLCMD -d openstreetmap -c "SELECT setval('changesets_id_seq', $LAST_CHANGESET)"
+    # Also update the sequences in the database.
+    echo 'update sequences'
+    for i in "${SEQUENCE_TABLES[@]}"
+    do
+       echo "$i"
+       update_sequence "$i"
+    done
 fi
 
 # migrate the database from the osmosis version to the latest version
