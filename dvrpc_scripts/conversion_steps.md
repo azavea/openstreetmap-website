@@ -40,9 +40,11 @@ Source data from DVRPC:
     - shapefile has a field for signal, but it is unset for all entries
  - run the JOSM validator (should have no errors; ignore the warnings)
  - save crosswalks as an OSM file
- - open sidewalks OSM as a second layer and re-save both layers as OSM
-    - JOSM will regenerate non-conflicting, negative IDs
- - run script `merge_ways.py` to merge the crosswalks and sidewalks to a single OSM file
+ - open sidewalks OSM as a second layer
+    - merge sidewalk layer into crosswalk layer
+    - rename and save merged layer
+ - update crosswalk OSM file name in `merge_ways.py` to merged OSM file name
+    - run script `merge_ways.py` to merge the crosswalk and sidewalk node references
 
 
 ## Convert curb cuts
