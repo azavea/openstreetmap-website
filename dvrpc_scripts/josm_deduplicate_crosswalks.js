@@ -73,6 +73,18 @@ osmCrosswalks.forEach(function (cw) {
 
     if (foundDvrpcCrosswalk) {
         console.println('Found matching crosswalk for OSM crosswalk. Deleting OSM crosswalk.\n');
+        // First traverse the way nodes and delete any not connected to anything else
+        // that would be orphaned by deleting this way.
+        // Leave any `highway=crossing` nodes also connected to the street
+        // (but do not connect such nodes to pedestrian-only network.)
+        cw.nodes.forEach(function(n, idx) {
+            var parentWays = n.getParentWays();
+            if (parentWays.size() === 1) {
+                // first remove node from way, to avoid integrity error on attempting to delete way
+                cw.removeNode(n);
+                n.setDeleted(true);
+            }
+        });
         cw.setDeleted(true);
         foundMatches += 1;
     }

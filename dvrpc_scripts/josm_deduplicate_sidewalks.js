@@ -63,6 +63,16 @@ osmSidewalks.forEach(function (sd) {
 
     if (foundDvrpcSidewalk) {
         console.println('Found matching sidewalk for OSM sidewalk. Deleting OSM sidewalk.\n');
+        // First traverse the way nodes and delete any not connected to anything else
+        // that would be orphaned by deleting this way.
+        sd.nodes.forEach(function(n, idx) {
+            var parentWays = n.getParentWays();
+            if (parentWays.size() === 1) {
+                // first remove node from way, to avoid integrity error on attempting to delete way
+                sd.removeNode(n);
+                n.setDeleted(true);
+            }
+        });
         sd.setDeleted(true);
         foundMatches += 1;
     }
